@@ -92,3 +92,7 @@ screen edges glow instead.
     falls back to polling.
   - It keeps Xbox's optional controller worker from starting, because that worker can't see the phone.
   - It forwards in-game rumble to the phone.
+
+## License
+
+[MIT](LICENSE)

@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Phone Pad for Cloud Gaming",
+  "version": "1.3.0",
+  "description": "Use your iPhone as a standard Xbox-layout gamepad in browser cloud gaming.",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "*://127.0.0.1/*",
+    "*://localhost/*"
+  ],
+  "action": {
+    "default_title": "Phone Pad"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.xbox.com/*"
+      ],
+      "js": [
+        "inject.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN",
+      "match_origin_as_fallback": true
+    },
+    {
+      "matches": [
+        "https://*.xbox.com/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_origin_as_fallback": true
+    }
+  ]
+}

@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Phone Pad">
+<meta name="theme-color" content="#090b0f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>Phone Pad</title>
+<style>
+  :root {
+    --bg: #090b0f; --bg2: #11151c;
+    --btn: #1a1f28; --btn2: #222935; --edge: #2b3340; --ink: #e9eef5; --dim: #7b8594;
+    --a: #4ade80; --b: #f87171; --x: #60a5fa; --y: #facc15; --accent: #4ade80;
+    --sl: env(safe-area-inset-left); --sr: env(safe-area-inset-right);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; position: fixed; inset: 0;
+    background: radial-gradient(120% 90% at 50% 20%, var(--bg2) 0%, var(--bg) 70%);
+    color: var(--ink); font: 600 14px/1 -apple-system, system-ui, sans-serif;
+    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; overscroll-behavior: none;
+  }
+  #pad { position: absolute; inset: 0; }
+  #pad::after { /* rumble glow */
+    content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .12s;
+    box-shadow: inset 0 0 6vh 1vh color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  #pad.rumble::after { opacity: var(--rumble, .8); }
+
+  /* ---------- Generic button ---------- */
+  .btn {
+    position: absolute; display: grid; place-items: center; color: var(--ink);
+    background: linear-gradient(180deg, var(--btn2), var(--btn));
+    border: 1px solid var(--edge); border-radius: 50%;
+    box-shadow: 0 .8vh 0 #05070a, inset 0 1px 0 rgba(255,255,255,.07);
+    transition: transform .045s, box-shadow .045s, background .045s;
+  }
+  .btn.on { transform: translateY(.7vh); box-shadow: 0 .1vh 0 #05070a, inset 0 0 2vh rgba(255,255,255,.08); }
+  .btn svg { width: 46%; height: 46%; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Face buttons */
+  .face { width: 15vh; height: 15vh; font-size: 6.2vh; font-weight: 800; }
+  .face.a { color: var(--a); } .face.b { color: var(--b); } .face.x { color: var(--x); } .face.y { color: var(--y); }
+  .face.on { color: #0b0d10; }
+  .face.a.on { background: var(--a); box-shadow: 0 .1vh 0 #05070a, 0 0 3vh color-mix(in srgb, var(--a) 60%, transparent); }
+  .face.b.on { background: var(--b); box-shadow: 0 .1vh 0 #05070a, 0 0 3vh color-mix(in srgb, var(--b) 60%, transparent); }
+  .face.x.on { background: var(--x); box-shadow: 0 .1vh 0 #05070a, 0 0 3vh color-mix(in srgb, var(--x) 60%, transparent); }
+  .face.y.on { background: var(--y); box-shadow: 0 .1vh 0 #05070a, 0 0 3vh color-mix(in srgb, var(--y) 60%, transparent); }
+
+  /* Shoulders + triggers */
+  .shoulder { border-radius: 2.2vh 2.2vh 1.4vh 1.4vh; width: 14vw; height: 11vh; font-size: 4.4vh; }
+  .shoulder.on { background: linear-gradient(180deg, #3a4454, #2b3340); color: var(--accent); }
+  .trigger {
+    border-radius: 1.6vh 1.6vh 3.4vh 3.4vh; width: 14vw; height: 22vh; font-size: 4.4vh; overflow: hidden;
+    align-content: end; padding-bottom: 3vh;
+  }
+  .trigger .fill {
+    position: absolute; left: 0; right: 0; top: 0; height: 0%; pointer-events: none;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 25%, transparent), color-mix(in srgb, var(--accent) 70%, transparent));
+  }
+  .trigger span { position: relative; }
+  .trigger.on { color: var(--ink); }
+
+  /* D-pad cross */
+  .dpad { position: absolute; width: 33vh; height: 33vh; }
+  .dpad::before { /* centre plate */
+    content: ''; position: absolute; left: 11vh; top: 11vh; width: 11vh; height: 11vh;
+    background: var(--btn); border-left: 1px solid var(--edge); border-right: 1px solid var(--edge);
+  }
+  .dpad .btn { border-radius: 1.6vh; width: 11.4vh; height: 11.4vh; color: var(--dim); }
+  .dpad .btn.on { color: var(--accent); background: linear-gradient(180deg, #2f3846, #252c37); }
+
+  /* Centre cluster */
+  .meta { width: 9.5vh; height: 9.5vh; color: var(--dim); }
+  .meta.home { width: 13vh; height: 13vh; color: var(--ink); border-color: color-mix(in srgb, var(--accent) 40%, var(--edge)); }
+  .meta.on { color: var(--accent); }
+
+  /* Sticks */
+  .stick { position: absolute; }
+  .stick .base {
+    position: absolute; width: 31vh; height: 31vh; border-radius: 50%; left: 50%; top: 50%;
+    transform: translate(-50%, -50%); pointer-events: none;
+    background: radial-gradient(circle, #0d1015 0 38%, #10141a 39% 100%);
+    border: 1px solid var(--edge); box-shadow: inset 0 0 3vh rgba(0,0,0,.6);
+  }
+  .stick .base::after { /* direction glow */
+    content: ''; position: absolute; inset: -1px; border-radius: 50%; opacity: var(--mag, 0);
+    background: conic-gradient(from var(--ang, 0deg), color-mix(in srgb, var(--accent) 70%, transparent) 0deg, transparent 50deg, transparent 310deg, color-mix(in srgb, var(--accent) 70%, transparent) 360deg);
+    -webkit-mask: radial-gradient(circle, transparent 64%, #000 66%); mask: radial-gradient(circle, transparent 64%, #000 66%);
+  }
+  .stick .knob {
+    position: absolute; width: 14vh; height: 14vh; border-radius: 50%; left: 50%; top: 50%; pointer-events: none;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle at 42% 35%, #3d4757, #1e242d 70%); border: 1px solid #4a5566;
+    box-shadow: 0 1vh 2vh rgba(0,0,0,.5), inset 0 0 0 1.6vh rgba(255,255,255,.02);
+  }
+  .stick.active .base { border-color: #3a4352; }
+  .stick.pressed .knob { border-color: var(--accent); box-shadow: 0 0 0 .6vh color-mix(in srgb, var(--accent) 35%, transparent); }
+  .stick .hint { position: absolute; left: 0; right: 0; bottom: 1.5vh; text-align: center; color: #4b5463; font-size: 10px; font-weight: 600; pointer-events: none; }
+
+  /* Status pill */
+  #status {
+    position: absolute; left: 50%; top: 3vh; transform: translateX(-50%); z-index: 2;
+    display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border-radius: 999px;
+    background: rgba(20,24,31,.85); border: 1px solid var(--edge); font-size: 12px; color: var(--dim); white-space: nowrap;
+  }
+  #status i { width: 8px; height: 8px; border-radius: 50%; background: var(--b); box-shadow: 0 0 8px currentColor; color: var(--b); }
+  #status.ok i { background: var(--a); color: var(--a); }
+  #status.half i { background: var(--y); color: var(--y); }
+  #ping { color: #5d6776; font-variant-numeric: tabular-nums; }
+  #gear { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--btn2); color: var(--ink); font-size: 15px; }
+
+  /* Overlays */
+  #rotate, #menu { position: fixed; inset: 0; display: none; place-items: center; z-index: 10; }
+  #rotate { background: var(--bg); text-align: center; padding: 24px; line-height: 1.5; font-weight: 500; }
+  @media (orientation: portrait) { #rotate { display: grid; } }
+  #rotate b { font-size: 46px; display: block; margin-bottom: 10px; }
+  #menu { background: rgba(5,7,10,.72); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); touch-action: auto; }
+  #menu.open { display: grid; }
+  .card {
+    width: min(620px, 92vw); max-height: 92vh; overflow: auto; background: #12161d; border: 1px solid var(--edge);
+    border-radius: 18px; padding: 14px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px;
+  }
+  .card h2 { grid-column: 1 / -1; margin: 2px 0 6px; font-size: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 40px; font-size: 13.5px; font-weight: 500; border-bottom: 1px solid #1c222b; }
+  .row small { color: var(--dim); font-weight: 500; margin-left: 4px; }
+  .row input[type=range] { width: 120px; accent-color: var(--accent); }
+  .row input[type=checkbox]:not([switch]) { width: 20px; height: 20px; accent-color: var(--accent); }
+  .row input[switch] { accent-color: var(--accent); transform: scale(1.1); }
+  .seg { display: inline-flex; background: #0b0e13; border: 1px solid var(--edge); border-radius: 9px; padding: 2px; }
+  .seg button { border: 0; background: none; color: var(--dim); font: 600 12px -apple-system, system-ui; padding: 6px 9px; border-radius: 7px; }
+  .seg button.sel { background: var(--btn2); color: var(--ink); }
+  .actions { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 10px; }
+  .actions button { flex: 1; padding: 11px; border-radius: 11px; border: 1px solid var(--edge); background: var(--btn2); color: var(--ink); font: 650 13.5px -apple-system, system-ui; }
+  .actions button.primary { background: var(--accent); color: #06210f; border-color: transparent; }
+  .note { grid-column: 1 / -1; color: var(--dim); font-size: 11.5px; font-weight: 500; line-height: 1.45; margin-top: 8px; }
+  #hapticLabel { display: none; }
+  html:not(.native) .native-only, html.native .web-only { display: none; }
+</style>
+</head>
+<body>
+<div id="pad">
+  <!-- Triggers & bumpers -->
+  <div class="btn trigger" data-trig="0" style="left:calc(var(--sl) + 2vw); top:3vh"><div class="fill"></div><span>LT</span></div>
+  <div class="btn shoulder" data-b="4" style="left:calc(var(--sl) + 17.5vw); top:3vh">LB</div>
+  <div class="btn shoulder" data-b="5" style="right:calc(var(--sr) + 17.5vw); top:3vh">RB</div>
+  <div class="btn trigger" data-trig="1" style="right:calc(var(--sr) + 2vw); top:3vh"><div class="fill"></div><span>RT</span></div>
+
+  <!-- Left stick (floating: put your thumb anywhere in the zone) -->
+  <div class="stick" id="ls" data-stick="0" style="left:var(--sl); top:27vh; width:36vw; height:45vh">
+    <div class="base"></div><div class="knob"></div><div class="hint">double-tap · L3</div>
+  </div>
+
+  <!-- D-pad -->
+  <div class="dpad" style="left:calc(var(--sl) + 21vw); bottom:3vh">
+    <div class="btn" data-b="12" style="left:10.8vh; top:0"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></div>
+    <div class="btn" data-b="14" style="left:0; top:10.8vh"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>
+    <div class="btn" data-b="15" style="left:21.6vh; top:10.8vh"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+    <div class="btn" data-b="13" style="left:10.8vh; top:21.6vh"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></div>
+  </div>
+
+  <!-- Centre cluster -->
+  <div id="status"><i></i><span id="statusText">connecting…</span><span id="ping"></span><div id="gear" aria-label="Settings">⚙︎</div></div>
+  <div class="btn meta" data-b="8" style="left:calc(50% - 17vh); top:18vh" aria-label="View">
+    <svg viewBox="0 0 24 24"><rect x="4" y="4" width="11" height="11" rx="2"/><rect x="9" y="9" width="11" height="11" rx="2"/></svg></div>
+  <div class="btn meta home" data-b="16" style="left:calc(50% - 6.5vh); top:16vh" aria-label="Home">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M9 9l6 6M15 9l-6 6"/></svg></div>
+  <div class="btn meta" data-b="9" style="left:calc(50% + 8vh); top:18vh" aria-label="Menu">
+    <svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg></div>
+
+  <!-- Right stick (before face buttons so they sit on top where they meet) -->
+  <div class="stick" id="rs" data-stick="1" style="right:calc(var(--sr) + 21vw); bottom:0; width:30vw; height:38vh">
+    <div class="base"></div><div class="knob"></div><div class="hint">double-tap · R3</div>
+  </div>
+
+  <!-- Face buttons -->
+  <div style="position:absolute; right:calc(var(--sr) + 3vw); top:25vh; width:45vh; height:45vh">
+    <div class="btn face y" data-b="3" style="left:15vh; top:0">Y</div>
+    <div class="btn face x" data-b="2" style="left:0; top:15vh">X</div>
+    <div class="btn face b" data-b="1" style="left:30vh; top:15vh">B</div>
+    <div class="btn face a" data-b="0" style="left:15vh; top:30vh">A</div>
+  </div>
+</div>
+
+<div id="rotate"><div><b>⟲</b>Turn your iPhone sideways.<br><span style="color:var(--dim)">Tip: Share → Add to Home Screen for full screen.</span></div></div>
+
+<div id="menu"><div class="card">
+  <h2>Settings <span id="hapticVersion" style="color:var(--dim);font-size:11px;font-weight:500"></span></h2>
+  <div class="row">Stick size <span><small id="vRadius"></small> <input id="optRadius" type="range" min="30" max="110"></span></div>
+  <div class="row">Dead zone <span><small id="vDead"></small> <input id="optDead" type="range" min="0" max="30"></span></div>
+  <div class="row">Analog triggers <input id="optAnalog" type="checkbox" switch></div>
+  <div class="row">Invert right stick Y <input id="optInvert" type="checkbox" switch></div>
+  <div class="row">Haptics
+    <span class="seg" id="segHaptic">
+      <button data-v="off">Off</button><button data-v="press">Press</button><button data-v="release">Release</button><button data-v="both">Both</button>
+    </span>
+  </div>
+  <div class="row native-only">Rumble vibration <input id="optRumble" type="checkbox" switch></div>
+  <div class="row">Rumble glow <input id="optGlow" type="checkbox" switch></div>
+  <div class="row">Show debug info on Mac <input id="optDebug" type="checkbox" switch></div>
+  <div class="row" style="border:0"></div>
+  <div class="actions">
+    <button id="testHaptic">Test haptics</button>
+    <button id="replug">Reconnect to game</button>
+    <button id="changeMac" class="native-only">Change Mac</button>
+    <button id="close" class="primary">Done</button>
+  </div>
+  <div class="note native-only">Analog triggers: touch near the top of LT/RT for a light press and slide down for full.
+    Haptics tick on every press; rumble vibration follows the game.</div>
+  <div class="note web-only">Analog triggers: touch near the top of LT/RT for a light press and slide down for full. Haptics need iOS 18 or later. If
+    you feel nothing with "Both", your iOS version blocks web haptics; the screen edge glow still shows in-game rumble.</div>
+</div></div>
+
+<!-- iOS haptics: toggling a switch-style checkbox gives a system haptic tick. -->
+<label id="hapticLabel" aria-hidden="true"><input type="checkbox" switch></label>
+
+<script>
+(() => {
+  // ---------- Options ----------
+  // Running inside the Phone Pad iPhone app? Then haptics go to the real vibration motor.
+  const NATIVE = !!(window.__phonePadNative && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.phonepad);
+  const toNative = (m) => { try { window.webkit.messageHandlers.phonepad.postMessage(m); } catch {} };
+  const DEFAULTS = NATIVE
+    ? { radius: 60, dead: 8, analog: true, invert: false, haptic: 'press', glow: false, rumble: true }
+    : { radius: 60, dead: 8, analog: true, invert: false, haptic: 'both', glow: true, rumble: true };
+  const opts = Object.assign({}, DEFAULTS, (() => { try { return JSON.parse(localStorage.getItem('phonepad') || '{}'); } catch { return {}; } })());
+  if (opts.haptic === true) opts.haptic = 'both'; else if (opts.haptic === false) opts.haptic = 'off'; // old format
+  const save = () => { try { localStorage.setItem('phonepad', JSON.stringify(opts)); } catch {} };
+
+  // ---------- State ----------
+  const NBTN = 17;
+  const btn = new Array(NBTN).fill(0);
+  const axes = [0, 0, 0, 0];
+  const trig = [0, 0];
+  let dirty = true;
+
+  // ---------- Connection ----------
+  const statusEl = document.getElementById('status'), statusText = document.getElementById('statusText'), pingEl = document.getElementById('ping');
+  let ws, wsOpen = false;
+  function connect() {
+    ws = new WebSocket(`ws://${location.host}/ws?role=pad`);
+    ws.onopen = () => {
+      wsOpen = true; dirty = true; setStatus('half', 'Waiting for Xbox tab');
+      ws.send(JSON.stringify({ t: 'hello', ua: navigator.userAgent }));
+    };
+    ws.onclose = () => { wsOpen = false; pingEl.textContent = ''; setStatus('', 'Reconnecting…'); setTimeout(connect, 1000); };
+    ws.onerror = () => ws.close();
+    ws.onmessage = (e) => {
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      if (m.t === 'status') m.games > 0 ? setStatus('ok', 'Connected') : setStatus('half', 'Waiting for Xbox tab');
+      else if (m.t === 'pong') pingEl.textContent = `${Math.max(1, Math.round(performance.now() - m.c))} ms`;
+      else if (m.t === 'rumble') rumble(typeof m.s === 'number' ? m.s : 0.5, m.d || 120);
+    };
+  }
+  function setStatus(cls, text) { statusEl.className = cls; statusText.textContent = text; }
+  connect();
+  setInterval(() => { if (wsOpen) ws.send(JSON.stringify({ t: 'ping', c: performance.now() })); }, 2000);
+
+  function flush() {
+    if (dirty && wsOpen) {
+      let mask = 0;
+      for (let i = 0; i < NBTN; i++) if (btn[i]) mask |= 1 << i;
+      if (trig[0] > 0) mask |= 1 << 6;
+      if (trig[1] > 0) mask |= 1 << 7;
+      const r = (v) => Math.round(v * 1000) / 1000;
+      ws.send(JSON.stringify({ t: 's', b: mask, a: axes.map(r), tr: trig.map(r) }));
+      dirty = false;
+    }
+    requestAnimationFrame(flush);
+  }
+  requestAnimationFrame(flush);
+  setInterval(() => { dirty = true; }, 500); // keep-alive
+
+  // ---------- Haptics ----------
+  const hapticLabel = document.getElementById('hapticLabel');
+  let lastTick = 0;
+  function tick(kind) { // kind: 'press' | 'release' | 'force'
+    if (kind !== 'force' && opts.haptic !== 'both' && opts.haptic !== kind) return;
+    const now = performance.now();
+    if (now - lastTick < 25) return; // one tick per gesture moment
+    lastTick = now;
+    if (NATIVE) { toNative({ type: 'tick', kind: kind === 'release' ? 'release' : 'press' }); return; }
+    try { hapticLabel.click(); } catch {}
+  }
+
+  // ---------- Rumble (visual; iOS won't let a page vibrate on its own) ----------
+  const pad = document.getElementById('pad');
+  let rumbleTimer = null;
+  function rumble(strength, ms) {
+    if (NATIVE && opts.rumble) toNative({ type: 'rumble', s: strength, d: ms });
+    if (!opts.glow || strength <= 0) return;
+    pad.style.setProperty('--rumble', String(Math.min(1, 0.35 + strength)));
+    pad.classList.add('rumble');
+    clearTimeout(rumbleTimer);
+    rumbleTimer = setTimeout(() => pad.classList.remove('rumble'), Math.min(1000, Math.max(80, ms)));
+  }
+
+  // ---------- Buttons ----------
+  const buttonEls = [...document.querySelectorAll('[data-b]')];
+  const elsByBtn = new Map();
+  for (const el of buttonEls) { const i = +el.dataset.b; if (!elsByBtn.has(i)) elsByBtn.set(i, []); elsByBtn.get(i).push(el); }
+  const touchToBtn = new Map(); // touch id -> button index (-1 none)
+
+  function setBtn(i, on) {
+    if (btn[i] === on) return false;
+    btn[i] = on; dirty = true;
+    (elsByBtn.get(i) || []).forEach((el) => el.classList.toggle('on', !!on));
+    return true;
+  }
+  function btnAt(x, y) {
+    const el = document.elementFromPoint(x, y);
+    const b = el && el.closest('[data-b]');
+    return b ? +b.dataset.b : -1;
+  }
+  // Returns {pressed, released} counts so the caller can tick once.
+  function refreshButtons() {
+    const held = new Set(touchToBtn.values());
+    let pressed = 0, released = 0;
+    for (let i = 0; i < NBTN; i++) {
+      const on = held.has(i) || stickClick(i) ? 1 : 0;
+      if (setBtn(i, on)) on ? pressed++ : released++;
+    }
+    return { pressed, released };
+  }
+
+  // ---------- Analog triggers ----------
+  const trigEls = [...document.querySelectorAll('[data-trig]')];
+  const touchToTrig = new Map(); // touch id -> trigger index
+  function trigValue(el, y) {
+    if (!opts.analog) return 1;
+    const r = el.getBoundingClientRect();
+    const f = Math.max(0, Math.min(1, (y - r.top) / r.height));
+    return 0.35 + 0.65 * f; // top of the button = light press, bottom = full
+  }
+  function setTrig(i, v) {
+    if (trig[i] === v) return;
+    trig[i] = v; dirty = true;
+    const el = trigEls[i];
+    el.classList.toggle('on', v > 0);
+    el.querySelector('.fill').style.height = `${Math.round(v * 100)}%`;
+  }
+
+  // ---------- Sticks ----------
+  const sticks = [...document.querySelectorAll('[data-stick]')].map((el) => ({
+    el, idx: +el.dataset.stick, base: el.querySelector('.base'), knob: el.querySelector('.knob'),
+    touch: null, ox: 0, oy: 0, lastTap: 0, click: false,
+  }));
+  function stickClick(i) { return (i === 10 && sticks[0].click) || (i === 11 && sticks[1].click); }
+  function placeStick(s, x, y) {
+    const r = s.el.getBoundingClientRect();
+    s.base.style.left = s.knob.style.left = (x - r.left) + 'px';
+    s.base.style.top = s.knob.style.top = (y - r.top) + 'px';
+  }
+  function resetStick(s) {
+    s.touch = null; s.click = false; s.el.classList.remove('pressed', 'active');
+    s.base.style.left = s.knob.style.left = '50%';
+    s.base.style.top = s.knob.style.top = '50%';
+    s.knob.style.transform = 'translate(-50%, -50%)';
+    s.base.style.setProperty('--mag', 0);
+    axes[s.idx * 2] = axes[s.idx * 2 + 1] = 0; dirty = true;
+  }
+  function moveStick(s, x, y) {
+    let dx = x - s.ox, dy = y - s.oy;
+    const R = opts.radius, d = Math.hypot(dx, dy);
+    if (d > R) { dx = dx / d * R; dy = dy / d * R; }
+    s.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    let nx = dx / R, ny = dy / R;
+    const mag = Math.hypot(nx, ny), dz = opts.dead / 100;
+    if (mag < dz) { nx = ny = 0; }
+    else { const k = (mag - dz) / (1 - dz) / mag; nx *= k; ny *= k; }
+    s.base.style.setProperty('--mag', Math.min(1, Math.hypot(nx, ny)).toFixed(2));
+    s.base.style.setProperty('--ang', `${Math.atan2(nx, -ny) * 180 / Math.PI}deg`);
+    if (s.idx === 1 && opts.invert) ny = -ny;
+    axes[s.idx * 2] = Math.max(-1, Math.min(1, nx));
+    axes[s.idx * 2 + 1] = Math.max(-1, Math.min(1, ny));
+    dirty = true;
+  }
+
+  // ---------- Touch routing ----------
+  pad.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    requestWakeLock();
+    let pressedSomething = false;
+    for (const t of e.changedTouches) {
+      const el = document.elementFromPoint(t.clientX, t.clientY);
+      if (el && el.closest('#gear')) { openMenu(); continue; }
+      const trigEl = el && el.closest('[data-trig]');
+      if (trigEl) {
+        const i = +trigEl.dataset.trig;
+        touchToTrig.set(t.identifier, i);
+        setTrig(i, trigValue(trigEl, t.clientY));
+        pressedSomething = true;
+        continue;
+      }
+      const stickEl = el && el.closest('[data-stick]');
+      if (stickEl) {
+        const s = sticks[+stickEl.dataset.stick];
+        if (s.touch !== null) continue;
+        s.touch = t.identifier; s.ox = t.clientX; s.oy = t.clientY;
+        s.el.classList.add('active');
+        const now = performance.now();
+        if (now - s.lastTap < 300) { s.click = true; s.el.classList.add('pressed'); }
+        s.lastTap = now;
+        placeStick(s, t.clientX, t.clientY);
+        moveStick(s, t.clientX, t.clientY);
+        continue;
+      }
+      touchToBtn.set(t.identifier, btnAt(t.clientX, t.clientY));
+    }
+    const { pressed } = refreshButtons();
+    if (pressed || pressedSomething) tick('press');
+  }, { passive: false });
+
+  pad.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      const s = sticks.find((s) => s.touch === t.identifier);
+      if (s) { moveStick(s, t.clientX, t.clientY); continue; }
+      if (touchToTrig.has(t.identifier)) {
+        const i = touchToTrig.get(t.identifier);
+        setTrig(i, trigValue(trigEls[i], t.clientY));
+        continue;
+      }
+      if (touchToBtn.has(t.identifier)) {
+        const prev = touchToBtn.get(t.identifier), now = btnAt(t.clientX, t.clientY);
+        // roll between buttons, but don't drop a held button when sliding into empty space
+        if (now !== -1 && now !== prev) touchToBtn.set(t.identifier, now);
+      }
+    }
+    const { pressed } = refreshButtons();
+    if (pressed) tick('press'); // works only where iOS allows haptics during a slide
+  }, { passive: false });
+
+  const end = (e) => {
+    e.preventDefault();
+    let releasedSomething = false;
+    for (const t of e.changedTouches) {
+      const s = sticks.find((s) => s.touch === t.identifier);
+      if (s) { if (s.click) releasedSomething = true; resetStick(s); }
+      if (touchToTrig.has(t.identifier)) { setTrig(touchToTrig.get(t.identifier), 0); touchToTrig.delete(t.identifier); releasedSomething = true; }
+      touchToBtn.delete(t.identifier);
+    }
+    const { released } = refreshButtons();
+    if ((released || releasedSomething) && e.type === 'touchend') tick('release');
+  };
+  pad.addEventListener('touchend', end, { passive: false });
+  pad.addEventListener('touchcancel', end, { passive: false });
+
+  // Release everything if the page is hidden (app switch, lock)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      touchToBtn.clear(); touchToTrig.clear(); setTrig(0, 0); setTrig(1, 0);
+      sticks.forEach(resetStick); refreshButtons();
+    }
+  });
+
+  // ---------- Wake lock ----------
+  let lock = null;
+  async function requestWakeLock() {
+    if (lock || !('wakeLock' in navigator)) return;
+    try { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => (lock = null)); } catch {}
+  }
+
+  // ---------- Settings ----------
+  const menu = document.getElementById('menu');
+  const $ = (id) => document.getElementById(id);
+  function syncMenu() {
+    $('optRadius').value = opts.radius; $('vRadius').textContent = opts.radius;
+    $('optDead').value = opts.dead; $('vDead').textContent = opts.dead + '%';
+    $('optAnalog').checked = opts.analog; $('optInvert').checked = opts.invert; $('optGlow').checked = opts.glow;
+    $('optRumble').checked = opts.rumble;
+    for (const b of $('segHaptic').children) b.classList.toggle('sel', b.dataset.v === opts.haptic);
+  }
+  function openMenu() { syncMenu(); menu.classList.add('open'); }
+  $('optRadius').addEventListener('input', (e) => { opts.radius = +e.target.value; $('vRadius').textContent = opts.radius; save(); });
+  $('optDead').addEventListener('input', (e) => { opts.dead = +e.target.value; $('vDead').textContent = opts.dead + '%'; save(); });
+  $('optAnalog').addEventListener('change', (e) => { opts.analog = e.target.checked; save(); });
+  $('optInvert').addEventListener('change', (e) => { opts.invert = e.target.checked; save(); });
+  $('optGlow').addEventListener('change', (e) => { opts.glow = e.target.checked; save(); });
+  $('optRumble').addEventListener('change', (e) => { opts.rumble = e.target.checked; save(); });
+  $('changeMac').addEventListener('click', () => toNative({ type: 'changeServer' }));
+  if (NATIVE) document.documentElement.classList.add('native');
+  $('segHaptic').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    opts.haptic = b.dataset.v; save(); syncMenu();
+    if (opts.haptic !== 'off') tick('force');
+  });
+  $('testHaptic').addEventListener('click', () => { tick('force'); rumble(0.6, 250); });
+  $('optDebug').addEventListener('change', () => {
+    if (wsOpen) ws.send(JSON.stringify({ t: 'debug', on: $('optDebug').checked }));
+  });
+  $('replug').addEventListener('click', () => {
+    if (wsOpen) ws.send('{"t":"reconnect"}');
+    $('replug').textContent = 'Sent ✓';
+    setTimeout(() => { $('replug').textContent = 'Reconnect to game'; menu.classList.remove('open'); }, 700);
+  });
+  $('close').addEventListener('click', () => menu.classList.remove('open'));
+  menu.addEventListener('click', (e) => { if (e.target === menu) menu.classList.remove('open'); });
+  const sv = navigator.userAgent.match(/Version\/(\d+(?:\.\d+)?)/);
+  $('hapticVersion').textContent = NATIVE ? 'Phone Pad app' : sv ? `Safari ${sv[1]}` : '';
+})();
+</script>
+</body>
+</html>

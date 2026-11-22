@@ -1,0 +1,7 @@
+# iPhone app: personal signing/device details, kept local
+ios/
+
+# macOS / editor junk
+.DS_Store
+*.zip
+node_modules/

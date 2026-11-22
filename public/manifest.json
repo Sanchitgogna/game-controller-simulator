@@ -1,0 +1,10 @@
+{
+  "name": "Phone Pad",
+  "short_name": "Phone Pad",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b0d10",
+  "theme_color": "#0b0d10",
+  "start_url": "/",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
